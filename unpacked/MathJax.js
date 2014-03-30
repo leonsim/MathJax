@@ -1808,7 +1808,7 @@ MathJax.Message = {
 MathJax.Hub = {
   config: {
     root: "",
-    config: [],      // list of configuration files to load
+    config: ['TeX-AMS_HTML.js'],      // list of configuration files to load
     styleSheets: [], // list of CSS files to load
     styles: {        // styles to generate in-line
       ".MathJax_Preview": {color: "#888"}
@@ -1829,8 +1829,8 @@ MathJax.Hub = {
     elements: [],             // array of elements to process when none is given explicitly
     positionToHash: true,    // after initial typeset pass, position to #hash location?
      
-    showMathMenu: true,      // attach math context menu to typeset math?
-    showMathMenuMSIE: true,  // separtely determine if MSIE should have math menu
+    showMathMenu: false,      // attach math context menu to typeset math?
+    showMathMenuMSIE: false,  // separtely determine if MSIE should have math menu
                              //  (since the code for that is a bit delicate)
 
     menuSettings: {
