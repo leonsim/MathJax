@@ -38,43 +38,56 @@
    
   var FONTTEST = MathJax.Object.Subclass({
     timeout:  (isMobile? 15:8)*1000,   // timeout for loading web fonts
-
-    FontInfo: {
-      STIX: {family: "STIXSizeOneSym", testString: "() {} []"},
-      TeX:  {family: "MathJax_Size1",  testString: "() {} []"},
-      "STIX-Web":  {family: "STIXWeb_Size1",  testString: "() {} []"},
-      "Asana-Math":  {family: "AsanaMath_Size1",  testString: "() {} []"},
-      "Gyre-Pagella":  {family: "GyrePagella_Size1",  testString: "() {} []"},
-      "Gyre-Termes":  {family: "GyreTermes_Size1",  testString: "() {} []"},
-      "Latin-Modern":  {family: "LatinModern_Size1",  testString: "() {} []"},
-      "Neo-Euler":  {family: "NeoEuler_Size1",  testString: "() {} []"}
-    },
     comparisonFont: ["sans-serif","monospace","script","Times","Courier","Arial","Helvetica"],
     testSize: ["40px","50px","60px","30px","20px"],
+    //
+    //  Fedora aliases STIXSizeOneSym to STIX Word, so MathJax thinks STIX is
+    //  available, but the fonts aren't actually correct.  This is to test if
+    //  STIXSizeOneSym has letters in it (so is actually STIX Word).
+    //  
+    FedoraSTIXcheck: {family:"STIXSizeOneSym", testString:"abcABC", noStyleChar:true},
 
     Init: function () {
-      this.div = MathJax.HTML.addElement(document.body,"div",{
-        id: "MathJax_Font_Test",
-        style: {position:"absolute", visibility:"hidden", top:0, left:0, width: "auto",
-                padding:0, border:0, margin:0, whiteSpace:"nowrap",
-                textAlign:"left", textIndent:0, textTransform:"none",
-                lineHeight:"normal", letterSpacing:"normal", wordSpacing:"normal",
-                fontSize:this.testSize[0], fontWeight:"normal", fontStyle:"normal",
-                fontSizeAdjust:"none"}
-      },[""]);
+      //
+      //  Wrap the Font_Test DIV in a 0x0 DIV so that it takes no room
+      //
+      this.div = MathJax.HTML.addElement(document.body,"div",{style: {
+          position:"absolute", width:0, height:0, overflow:"hidden",
+          padding:0, border:0, margin:0
+        }},[["div",{
+          id: "MathJax_Font_Test",
+          style: {position:"absolute", visibility:"hidden", top:0, left:0, width: "auto",
+                  padding:0, border:0, margin:0, whiteSpace:"nowrap",
+                  textAlign:"left", textIndent:0, textTransform:"none",
+                  lineHeight:"normal", letterSpacing:"normal", wordSpacing:"normal",
+                  fontSize:this.testSize[0], fontWeight:"normal", fontStyle:"normal",
+                  fontSizeAdjust:"none"}
+          },[""]]]
+      ).firstChild;
       this.text = this.div.firstChild;
     },
 
     findFont: function (fonts,pref) {
-      if (pref && this.testCollection(pref)) {return pref}
-      for (var i = 0, m = fonts.length; i < m; i++) {
-        if (fonts[i] === pref) continue;
-        if (this.testCollection(fonts[i])) {return fonts[i]}
+      var found = null;
+      if (pref && this.testCollection(pref)) {
+        found = pref;
+      } else {
+        for (var i = 0, m = fonts.length; i < m; i++) {
+          if (fonts[i] === pref) continue;
+          if (this.testCollection(fonts[i])) {found = fonts[i]; break}
+        }
       }
-      return null;
+      if (found === "STIX" && this.testFont(this.FedoraSTIXcheck)) {found = null}
+      return found;
     },
 
-    testCollection: function (name) {return this.testFont(this.FontInfo[name])},
+    testCollection: function (name) {
+      var font = {testString: "() {} []"};
+      font.family = {TeX:"MathJax_Size1", STIX:"STIXSizeOneSym"}[name] ||
+                     name.replace(/-(Math)?/,"")+"MathJax_Size1";
+      if (name === "STIX") {font.noStyleChar = true}
+      return this.testFont(font);
+    },
 
     testFont: function (font) {
       if (font.isWebFont && HTMLCSS.FontFaceBug) {
@@ -83,20 +96,39 @@
         this.div.style.fontWeight = (font.weight||"normal");
         this.div.style.fontStyle  = (font.style||"normal");
       }
+      //
+      //  Hack:  Fix up web font names for local access.
+      //  (The names for Windows and Mac are different, unlike in the STIX and
+      //  TeX fonts, so we have to work out a list of names here.)
+      //
+      //  This should be removed when the web fonts are fixed.  FIXME
+      //
+      var family = font.familyFixed || font.family;
+      if (!family.match(/^(STIX|MathJax)|'/)) {
+        family = family.replace(/_/g," ").replace(/([a-z])([A-Z])/g,"$1 $2").replace(/ Jax/,"Jax")
+               + "','" + family + "','" + family + "-";
+        if (font.weight) {family += "Bold"}; if (font.style) {family += "Italic"}
+        if (!font.weight && !font.style) {family += "Regular"}
+        font.familyFixed = family = "'"+family+"'"
+      }
+
       var W = this.getComparisonWidths(font.testString,font.noStyleChar);
+      var found = null;
       if (W) {
-        this.div.style.fontFamily = "'"+font.family+"',"+this.comparisonFont[0];
+        this.div.style.fontFamily = family+","+this.comparisonFont[0];
         if (this.div.offsetWidth == W[0]) {
-          this.div.style.fontFamily = "'"+font.family+"',"+this.comparisonFont[W[2]];
-          if (this.div.offsetWidth == W[1]) {return false}
+          this.div.style.fontFamily = family+","+this.comparisonFont[W[2]];
+          if (this.div.offsetWidth == W[1]) {found = false}
         }
-        if (this.div.offsetWidth != W[3] || this.div.offsetHeight != W[4]) {
-          if (font.noStyleChar || !HTMLCSS.FONTDATA || !HTMLCSS.FONTDATA.hasStyleChar) {return true}
-          for (var i = 0, m = this.testSize.length; i < m; i++)
-            {if (this.testStyleChar(font,this.testSize[i])) {return true}}
+        if (found === null && (this.div.offsetWidth != W[3] || this.div.offsetHeight != W[4])) {
+          if (!font.noStyleChar && HTMLCSS.FONTDATA && HTMLCSS.FONTDATA.hasStyleChar) {
+            for (var i = 0, m = this.testSize.length; i < m; i++)
+              {if (this.testStyleChar(font,this.testSize[i])) {found = true; m = 0}}
+          } else {found = true}
         }
       }
-      return false;
+      if (HTMLCSS.safariTextNodeBug) {this.div.innerHTML = ""} else {this.text.nodeValue = ""}
+      return found;
     },
 
     styleChar:   "\uEFFD", // width encodes style
@@ -182,18 +214,22 @@
       var type = HTMLCSS.allowWebFonts;
       var FONT = HTMLCSS.FONTDATA.FONTS[name];
       if (HTMLCSS.msieFontCSSBug && !FONT.family.match(/-Web$/)) {FONT.family += "-Web"}
-      var dir = AJAX.fileURL(HTMLCSS.webfontDir+"/"+type);
+      var webfonts = HTMLCSS.webfontDir+"/"+type;
+      var dir = AJAX.fileURL(webfonts);
       var fullname = name.replace(/-b/,"-B").replace(/-i/,"-I").replace(/-Bold-/,"-Bold");
       if (!fullname.match(/-/)) {fullname += "-Regular"}
       if (type === "svg") {fullname += ".svg#"+fullname} else {fullname += "."+type}
+      var rev = AJAX.fileRev(webfonts+"/"+fullname.replace(/#.*/,""));
       var def = {
         "font-family": FONT.family,
-        src: "url('"+dir+"/"+fullname+"')"
+        src: "url('"+dir+"/"+fullname+rev+"')"
       };
       if (type === "otf") {
+        fullname = fullname.replace(/otf$/,"woff");
+        rev = AJAX.fileRev(webfonts+"/"+fullname);
         def.src += " format('opentype')";
         dir = AJAX.fileURL(HTMLCSS.webfontDir+"/woff");  // add woff fonts as well
-        def.src = "url('"+dir+"/"+fullname.replace(/otf$/,"woff")+"') format('woff'), "+def.src;
+        def.src = "url('"+dir+"/"+fullname+rev+"') format('woff'), "+def.src;
       } else if (type !== "eot") {def.src += " format('"+type+"')"}
       if (!(HTMLCSS.FontFaceBug && FONT.isWebFont)) {
         if (name.match(/-bold/)) {def["font-weight"] = "bold"}
@@ -224,23 +260,30 @@
           "white-space":     "nowrap",
           "float":           "none",
           "direction":       "ltr",
+          "max-width": "none", "max-height": "none",
+          "min-width": 0, "min-height": 0,
           border: 0, padding: 0, margin: 0
         },
 
         ".MathJax_Display": {
           position: "relative",
-          display: "block",
+          display: "block!important",
+          "text-indent": 0,
+          "max-width": "none", "max-height": "none",
+          "min-width": 0, "min-height": 0,
           width: "100%"
         },
 
         ".MathJax img, .MathJax nobr, .MathJax a": {
-          border: 0, padding: 0, margin: 0, "max-width": "none", "max-height": "none",
+          border: 0, padding: 0, margin: 0,
+          "max-width": "none", "max-height": "none",
+          "min-width": 0, "min-height": 0,
           "vertical-align": 0, "line-height": "normal",
           "text-decoration": "none"
         },
         "img.MathJax_strut": {
-          border:"0 !important", padding:"0 !important", margin: "0 !important",
-          "vertical-align": "0 !important"
+          border:"0!important", padding:"0!important", margin:"0!important",
+          "vertical-align": "0!important"
         },
         
 	".MathJax span": {
@@ -251,12 +294,12 @@
 	},
 
         ".MathJax nobr": {
-          "white-space": "nowrap ! important"
+          "white-space": "nowrap!important"
         },
         
         ".MathJax img": {
-          display: "inline ! important",
-          "float": "none ! important"
+          display: "inline!important",
+          "float": "none!important"
         },
         
         ".MathJax *": {
@@ -274,12 +317,14 @@
         ".MathJax_Processed": {display:"none!important"},
         
         ".MathJax_ExBox": {
-          display:"block", overflow:"hidden",
-          width:"1px", height:"60ex"
+          display:"block!important", overflow:"hidden",
+          width:"1px", height:"60ex",
+          "min-height": 0, "max-height":"none"
         },
         ".MathJax .MathJax_EmBox": {
-          display:"block", overflow:"hidden",
-          width:"1px", height:"60em"
+          display:"block!important", overflow:"hidden",
+          width:"1px", height:"60em",
+          "min-height": 0, "max-height":"none"
         },
         
         ".MathJax .MathJax_HitBox": {
@@ -322,27 +367,43 @@
     maxStretchyParts: 1000,            // limit the number of parts allowed for
                                        // stretchy operators. See issue 366.
 
+    fontName: {
+      TeXLocal:       "TeX",
+      TeXWeb:         ["","TeX"],
+      TeXImage:       ["",""],
+      STIXLocal:      ["STIX","STIX-Web"],
+      STIXWeb:        "STIX-Web",
+      AsanaMathWeb:   "Asana-Math",
+      GyrePagellaWeb: "Gyre-Pagella",
+      GyreTermesWeb:  "Gyre-Termes",
+      LatinModernWeb: "Latin-Modern",
+      NeoEulerWeb:    "Neo-Euler"
+    },
+    
     Config: function () {
       if (!this.require) {this.require = []}
-      this.Font = FONTTEST();
-      this.SUPER(arguments).Config.call(this); var settings = this.settings;
-      if (this.adjustAvailableFonts) {this.adjustAvailableFonts(this.config.availableFonts)}
-      if (settings.scale) {this.config.scale = settings.scale}
-      if (settings.font && settings.font !== "Auto") {
-        if (settings.font === "TeXLocal") {this.config.availableFonts = ["TeX"]; this.config.preferredFont = "TeX"; this.config.webFont = "TeX"}
-        else if (settings.font === "TeXWeb") {this.config.availableFonts = []; this.config.preferredFont = ""; this.config.webFont = "TeX"}
-        else if (settings.font === "TeXimage") {this.config.availableFonts = []; this.config.preferredFont = ""; this.config.webFont = ""}
-        else if (settings.font === "STIXlocal") {this.config.availableFonts = ["STIX"]; this.config.preferredFont = "STIX"; this.config.webFont = "STIX-Web"}
-        else if (settings.font === "STIXWeb") {this.config.availableFonts = []; this.config.preferredFont = ""; this.config.webFont = "STIX-Web"}
-        else if (settings.font === "AsanaMathWeb") {this.config.availableFonts = []; this.config.preferredFont = ""; this.config.webFont = "Asana-Math"}
-        else if (settings.font === "GyrePagellaWeb") {this.config.availableFonts = []; this.config.preferredFont = ""; this.config.webFont = "Gyre-Pagella"}
-        else if (settings.font === "GyreTermesWeb") {this.config.availableFonts = []; this.config.preferredFont = ""; this.config.webFont = "Gyre-Termes"}
-        else if (settings.font === "LatinModernWeb") {this.config.availableFonts = []; this.config.preferredFont = ""; this.config.webFont = "Latin-Modern"}
-        else if (settings.font === "NeoEulerWeb") {this.config.availableFonts = []; this.config.preferredFont = ""; this.config.webFont = "Neo-Euler"}
+      this.Font = FONTTEST(); this.SUPER(arguments).Config.call(this);
+      var settings = this.settings, config = this.config, font = settings.font;
+      if (this.adjustAvailableFonts) {this.adjustAvailableFonts(config.availableFonts)}
+      if (settings.scale) {config.scale = settings.scale}
+      if (font && font !== "Auto" && this.fontName[font]) {
+        config.availableFonts = []; delete config.fonts;
+        if (this.fontName[font] instanceof Array) {
+          config.preferredFont = this.fontName[font][0];
+          config.webFont = this.fontName[font][1];
+        } else {
+          config.preferredFont = config.webFont = this.fontName[font];
+        }
+        if (config.preferredFont) {config.availableFonts[0] = config.preferredFont}
       }
-      var font = this.Font.findFont(this.config.availableFonts,this.config.preferredFont);
-      if (!font && this.allowWebFonts) {font = this.config.webFont; if (font) {this.webFonts = true}}
-      if (!font && this.config.imageFont) {font = this.config.imageFont; this.imgFonts = true}
+      if (config.fonts) {
+        config.availableFonts = config.fonts;
+        config.preferredFont = config.webFont = config.fonts[0];
+        if (config.webFont === "STIX") {config.webFont += "-Web"}
+      }
+      font = this.Font.findFont(config.availableFonts,config.preferredFont);
+      if (!font && this.allowWebFonts) {font = config.webFont; if (font) {this.webFonts = true}}
+      if (!font && this.config.imageFont) {font = config.imageFont; this.imgFonts = true}
       if (font) {
         this.fontInUse = font; this.fontDir += "/" + font; this.webfontDir += "/" + font;
         this.require.push(this.fontDir+"/fontdata.js");
@@ -432,6 +493,8 @@
       //  Safari/Windows doesn't display Plane1,
       //  so disable STIX for these browsers.
       //
+      //  ### FIXME ### Do we need to disable the other web fonts for these?
+      //
       for (var i = 0, m = fonts.length; i < m; i++)
         {if (fonts[i] === "STIX") {fonts.splice(i,1); m--; i--;}}
       if (this.config.preferredFont === "STIX") {this.config.preferredFont = fonts[0]}
@@ -450,6 +513,23 @@
     //
     InitializeHTML: function () {
       this.PreloadWebFonts();
+      this.getDefaultExEm();
+      //
+      //  If the defaultEm size is zero, it might be that a web font hasn't
+      //  arrived yet, so try to wait for it, but don't wait too long.
+      //
+      if (this.defaultEm) return;
+      var ready = MathJax.Callback();
+      AJAX.timer.start(AJAX,function (check) {
+        if (check.time(ready)) {HUB.signal.Post("HTML-CSS Jax - no default em size"); return}
+        HTMLCSS.getDefaultExEm();
+        if (HTMLCSS.defaultEm) {ready()} else {setTimeout(check,check.delay)}
+      },this.defaultEmDelay,this.defaultEmTimeout);
+      return ready;
+    },
+    defaultEmDelay: 100,      // initial delay when checking for defaultEm
+    defaultEmTimeout: 1000,   // when to stop looking for defaultEm
+    getDefaultExEm: function () {
       //
       //  Get the default sizes (need styles in place to do this)
       //
@@ -579,7 +659,8 @@
       //
       var jax = script.MathJax.elementJax, math = jax.root,
           span = document.getElementById(jax.inputID+"-Frame"),
-          div = (jax.HTMLCSS.display ? span.parentNode : span);
+          div = (jax.HTMLCSS.display ? (span||{}).parentNode : span);
+      if (!div) return;
       //
       //  Set the font metrics
       //
@@ -719,8 +800,14 @@
     initHTML: function (math,span) {},
     initFont: function (name) {
       var FONTS = HTMLCSS.FONTDATA.FONTS, AVAIL = HTMLCSS.config.availableFonts;
-      if (AVAIL && AVAIL.length && HTMLCSS.Font.testFont(FONTS[name]))
-        {FONTS[name].available = true; return null}
+      if (AVAIL && AVAIL.length && HTMLCSS.Font.testFont(FONTS[name])) {
+        FONTS[name].available = true;
+        if (FONTS[name].familyFixed) {
+          FONTS[name].family = FONTS[name].familyFixed;
+          delete FONTS[name].familyFixed;
+        }
+        return null;
+      }
       if (!this.allowWebFonts) {return null}
       FONTS[name].isWebFont = true;
       if (HTMLCSS.FontFaceBug) {
@@ -1337,24 +1424,16 @@
           }
         }
         if (variant.remap && variant.remap[n]) {
-          if (variant.remap[n] instanceof Array) {
-            var remap = variant.remap[n];
-            n = remap[0]; variant = this.FONTDATA.VARIANT[remap[1]];
-          } else if (typeof(variant.remap[n]) === "string") {
-            text = variant.remap[n]+text.substr(i+1);
-            i = 0; m = text.length; n = text.charCodeAt(0);
-          } else {
-            n = variant.remap[n];
-            if (variant.remap.variant) {variant = this.FONTDATA.VARIANT[variant.remap.variant]}
-          }
-        }
-        if (this.FONTDATA.REMAP[n] && !variant.noRemap) {
+          n = variant.remap[n];
+          if (variant.remap.variant) {variant = this.FONTDATA.VARIANT[variant.remap.variant]}
+        } else if (this.FONTDATA.REMAP[n] && !variant.noRemap) {
           n = this.FONTDATA.REMAP[n];
-          if (n instanceof Array) {variant = this.FONTDATA.VARIANT[n[1]]; n = n[0]}
-          if (typeof(n) === "string") {
-            text = n+text.substr(i+1);
-            i = 0; m = text.length; n = n.charCodeAt(0);
-          }
+        }
+        if (n instanceof Array) {variant = this.FONTDATA.VARIANT[n[1]]; n = n[0]} 
+        if (typeof(n) === "string") {
+          text = n+text.substr(i+1);
+          m = text.length; i = -1;
+          continue;
         }
         font = this.lookupChar(variant,n); c = font[n];
         if (force || (!this.checkFont(font,SPAN.style) && !c[5].img)) {
@@ -1602,9 +1681,13 @@
 	for (var i = 0, m = this.data.length; i < m; i++)
 	  {if (this.data[i]) {this.data[i].toHTML(span)}}
 	var stretchy = this.HTMLcomputeBBox(span);
-	var h = span.bbox.h, d = span.bbox.d;
-	for (i = 0, m = stretchy.length; i < m; i++) {stretchy[i].HTMLstretchV(span,h,d)}
-	if (stretchy.length) {this.HTMLcomputeBBox(span,true)}
+	var h = span.bbox.h, d = span.bbox.d, stretched = false;
+	for (i = 0, m = stretchy.length; i < m; i++) {
+          var bbox = stretchy[i].HTMLspanElement().bbox;
+          if (bbox.h !== h || bbox.d !== d)
+            {stretchy[i].HTMLstretchV(span,h,d); stretched = true}
+        }
+	if (stretched) {this.HTMLcomputeBBox(span,true)}
         if (this.HTMLlineBreaks(span)) {span = this.HTMLmultiline(span)}
 	this.HTMLhandleSpace(span);
 	this.HTMLhandleColor(span);
@@ -2158,8 +2241,12 @@
         span = this.HTMLhandleSize(this.HTMLcreateSpan(span)); 
         var variant = this.HTMLgetVariant();
         //  Avoid setting the font style for error text or if mtextFontInherit is set
-        if (HTMLCSS.config.mtextFontInherit || this.Parent().type === "merror")
-          {variant = {bold:variant.bold, italic:variant.italic, fontInherit: true}}
+        if (HTMLCSS.config.mtextFontInherit || this.Parent().type === "merror") {
+          var vname = this.Get("mathvariant");
+          if (vname === "monospace") {span.className += " MJX-monospace"}
+            else if (vname.match(/sans-serif/)) {span.className += " MJX-sans-serif"}
+          variant = {bold:variant.bold, italic:variant.italic, fontInherit: true};
+        }
         for (var i = 0, m = this.data.length; i < m; i++)
           {if (this.data[i]) {this.data[i].toHTML(span,variant)}}
         if (!span.bbox) {span.bbox = this.HTMLzeroBBox()}
@@ -2357,10 +2444,15 @@
       },
       HTMLcanStretch: function (direction) {return false},
       HTMLhandleSpace: function (span) {
-	if (!this.texWithDelims) {
-	  var space = (this.useMMLspacing ? 0 : HTMLCSS.length2em(this.texSpacing()||0)) + .12;
-	  span.style.paddingLeft  = HTMLCSS.Em(space);
-	  span.style.paddingRight = HTMLCSS.Em(.12);
+	if (!this.texWithDelims && !this.useMMLspacing) {
+          //
+          //  Add nulldelimiterspace around the fraction
+          //  (TeXBook pg 150 and Appendix G rule 15e)
+          //
+          var space = HTMLCSS.TeX.nulldelimiterspace;
+          var style = span.firstChild.style;
+          style.marginLeft = style.marginRight = HTMLCSS.Em(space);
+          span.bbox.w += 2*space; span.bbox.r += 2*space;
 	}
       }
     });
@@ -2724,23 +2816,31 @@
     });
 
     MML.TeXAtom.Augment({
-      toHTML: function (span) {
+      toHTML: function (span,HW,D) {
 	span = this.HTMLcreateSpan(span);
 	if (this.data[0] != null) {
 	  if (this.texClass === MML.TEXCLASS.VCENTER) {
 	    var stack = HTMLCSS.createStack(span);
 	    var box = HTMLCSS.createBox(stack);
-	    HTMLCSS.Measured(this.data[0].toHTML(box),box);
+            var child = this.data[0].toHTML(box);
+            if (D != null) {HTMLCSS.Remeasured(this.data[0].HTMLstretchV(box,HW,D),box)}
+            else if (HW != null) {HTMLCSS.Remeasured(this.data[0].HTMLstretchH(box,HW),box)}
+            else {HTMLCSS.Measured(child,box)}
 	    // FIXME: should the axis height be scaled?
 	    HTMLCSS.placeBox(box,0,HTMLCSS.TeX.axis_height-(box.bbox.h+box.bbox.d)/2+box.bbox.d);
 	  } else {
-	    span.bbox = this.data[0].toHTML(span).bbox;
+	    var html = this.data[0].toHTML(span,HW,D);
+            if (D != null) {html = this.data[0].HTMLstretchV(box,HW,D)}
+            else if (HW != null) {html = this.data[0].HTMLstretchH(box,HW)}
+            span.bbox = html.bbox;
 	  }
 	}
 	this.HTMLhandleSpace(span);
 	this.HTMLhandleColor(span);
 	return span;
-      }
+      },
+      HTMLstretchH: MML.mbase.HTMLstretchH,
+      HTMLstretchV: MML.mbase.HTMLstretchV
     });
     
     //
@@ -2869,9 +2969,10 @@
         HTMLCSS.Augment({
           Em: HTMLCSS.EmRounded,   // vertical alignment needs help (since around v20)
           cloneNodeBug: true,      // Chrome gets heights wrong with the cloned ones
-          rfuzz: .011,
+          rfuzz: -.02,
           AccentBug: true,
           AdjustSurd: true,
+          FontFaceBug: (browser.version.substr(0,3) === "32."), // Chrome 32 fails on bold-italic (#735)
           negativeBBoxes: true,
           safariNegativeSpaceBug: true,
           safariWebFontSerif: [""],
