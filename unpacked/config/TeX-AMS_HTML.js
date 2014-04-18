@@ -17,16 +17,19 @@
  */
 
 MathJax.Hub.Config({
-    TeX: { Augment: {
-      Definitions: {
-        macros: {
-          overparen: ['UnderOver','23DC'], // UnderOver represents the MathML element, 23DC the unicode character
-          underparen: ['UnderOver','23DD'] // UnderOver represents the MathML element, 23DC the unicode character
-        }
+  TeX: { Augment: {
+    Definitions: {
+      macros: {
+        overparen: ['UnderOver','23DC'], // UnderOver represents the MathML element, 23DC the unicode character
+        underparen: ['UnderOver','23DD'] // UnderOver represents the MathML element, 23DC the unicode character
       }
-    }},
+    }
+  }},
   extensions: ["tex2jax.js","MathEvents.js","MathZoom.js","MathMenu.js","toMathML.js","TeX/noErrors.js","TeX/noUndefined.js","TeX/AMSmath.js","TeX/AMSsymbols.js"],
-  jax: ["input/TeX","output/HTML-CSS"]
+  jax: ["input/TeX","output/HTML-CSS"],
+  "HTML-CSS": {
+    linebreaks: { automatic: true,width: "container" }
+  }
 });
 
 MathJax.Ajax.loadComplete("[MathJax]/config/TeX-AMS_HTML.js");
