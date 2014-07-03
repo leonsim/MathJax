@@ -9,7 +9,7 @@
  *
  *  ---------------------------------------------------------------------
  *  
- *  Copyright (c) 2011-2013 The MathJax Consortium
+ *  Copyright (c) 2011-2014 The MathJax Consortium
  * 
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@
  */
 
 MathJax.Hub.Register.StartupHook("SVG Jax Ready",function () {
-  var VERSION = "2.3";
+  var VERSION = "2.4.0";
   var MML = MathJax.ElementJax.mml,
       SVG = MathJax.OutputJax.SVG,
       BBOX = SVG.BBOX;
@@ -33,7 +33,7 @@ MathJax.Hub.Register.StartupHook("SVG Jax Ready",function () {
   MML.mtable.Augment({
     toSVG: function (span) {
       this.SVGgetStyles();
-      var svg = this.SVG();
+      var svg = this.SVG(), scale = this.SVGgetScale(svg);
       if (this.data.length === 0) {this.SVGsaveData(svg);return svg}
       var values = this.getValues("columnalign","rowalign","columnspacing","rowspacing",
                                   "columnwidth","equalcolumns","equalrows",
@@ -42,7 +42,7 @@ MathJax.Hub.Register.StartupHook("SVG Jax Ready",function () {
       //  Handle relative width as fixed width in relation to container
       if (values.width.match(/%$/))
         {svg.width = values.width = Math.floor(SVG.cwidth*parseFloat(values.width)/100)+"px"}
-      var scale = this.SVGgetScale(), mu = this.SVGgetMu(svg);
+      var mu = this.SVGgetMu(svg);
       var LABEL = -1;
 
       var H = [], D = [], W = [], A = [], C = [], i, j, J = -1,

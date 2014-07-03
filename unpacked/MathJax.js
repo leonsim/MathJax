@@ -12,7 +12,7 @@
  *  
  *  ---------------------------------------------------------------------
  *  
- *  Copyright (c) 2009-2013 The MathJax Consortium
+ *  Copyright (c) 2009-2014 The MathJax Consortium
  * 
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -45,10 +45,10 @@ if (window.MathJax) {window.MathJax = {AuthorConfig: window.MathJax}}
 
 // MathJax.isPacked = true; // This line is uncommented by the packer.
 
-MathJax.version = "2.3.2";
-MathJax.fileversion = "2.3.2.2";
-MathJax.cdnVersion = "2.3.2";      // specifies a revision to break caching
-MathJax.cdnFileVersions = {}; // can be used to specify revisions for individual files
+MathJax.version = "2.4.0";
+MathJax.fileversion = "2.4.0";
+MathJax.cdnVersion = "2.4-beta-2";  // specifies a revision to break caching
+MathJax.cdnFileVersions = {};       // can be used to specify revisions for individual files
 
 /**********************************************************/
 
@@ -1079,7 +1079,8 @@ MathJax.HTML = {
     Get: function (name,obj) {
       if (!obj) {obj = {}}
       var pattern = new RegExp("(?:^|;\\s*)"+this.prefix+"\\."+name+"=([^;]*)(?:;|$)");
-      var match = pattern.exec(document.cookie);
+      var match;
+      try {match = pattern.exec(document.cookie)} catch (err) {}; // ignore errors reading cookies
       if (match && match[1] !== "") {
         var keys = unescape(match[1]).split('&;');
         for (var i = 0, m = keys.length; i < m; i++) {
@@ -1107,14 +1108,16 @@ MathJax.Localization = {
     // Currently, this list is not modified by the MathJax-i18n script. You can
     // run the following command in MathJax/unpacked/localization to update it:
     //
-    // find -name *.js | xargs grep menuTitle\: | grep -v qqq | sed "s/^\.\/\(.*\)\/.*\.js\:  /    \"\1\"\: \{/" | sed "s/,$/\},/" | sed "s/\"English\"/\"English\", isLoaded: true/" > tmp ; sort tmp > tmp2 ; sed "$ s/,$//" tmp2 ; rm tmp*
+    // find . -name "*.js" | xargs grep menuTitle\: | grep -v qqq | sed 's/^\.\/\(.*\)\/.*\.js\:  /    "\1"\: \{/' | sed 's/,$/\},/' | sed 's/"English"/"English", isLoaded: true/' > tmp ; sort tmp > tmp2 ; sed '$ s/,$//' tmp2 ; rm tmp*
     //
     // This only takes languages with localization data so you must also add
     // the languages that use a remap but are not translated at all.
     //
+    "ast": {menuTitle: "asturianu"},
     "br": {menuTitle: "brezhoneg"},
+    "ca": {menuTitle: "catal\u00E0"},
     "cdo": {menuTitle: "M\u00ECng-d\u0115\u0324ng-ng\u1E73\u0304"},
-    "cs": {menuTitle: "\u010Desky"},
+    "cs": {menuTitle: "\u010De\u0161tina"},
     "da": {menuTitle: "dansk"},
     "de": {menuTitle: "Deutsch"},
     "en": {menuTitle: "English", isLoaded: true},
@@ -1128,19 +1131,21 @@ MathJax.Localization = {
     "ia": {menuTitle: "interlingua"},
     "it": {menuTitle: "italiano"},
     "ja": {menuTitle: "\u65E5\u672C\u8A9E"},
+    "kn": {menuTitle: "\u0C95\u0CA8\u0CCD\u0CA8\u0CA1"},
     "ko": {menuTitle: "\uD55C\uAD6D\uC5B4"},
     "lb": {menuTitle: "L\u00EBtzebuergesch"},
     "mk": {menuTitle: "\u043C\u0430\u043A\u0435\u0434\u043E\u043D\u0441\u043A\u0438"},
     "nl": {menuTitle: "Nederlands"},
     "oc": {menuTitle: "occitan"},
     "pl": {menuTitle: "polski"},
-    "pt-br": {menuTitle: "portugu\u00EAs do Brasil"},
     "pt": {menuTitle: "portugus\u00EA"},
+    "pt-br": {menuTitle: "portugu\u00EAs do Brasil"},
     "ru": {menuTitle: "\u0440\u0443\u0441\u0441\u043A\u0438\u0439"},
     "sl": {menuTitle: "sloven\u0161\u010Dina"},
     "sv": {menuTitle: "svenska"},
     "tr": {menuTitle: "T\u00FCrk\u00E7e"},
     "uk": {menuTitle: "\u0443\u043A\u0440\u0430\u0457\u043D\u0441\u044C\u043A\u0430"},
+    "vi": {menuTitle: "Ti\u1EBFng Vi\u1EC7t"},
     "zh-hans": {menuTitle: "\u4E2D\u6587\uFF08\u7B80\u4F53\uFF09"}
   },
 
@@ -1392,7 +1397,7 @@ MathJax.Localization = {
   //  directory and file.
   //
   loadFile: function (file,data,callback) {
-    callback = MathJax.Callback(callback||{});
+    callback = MathJax.Callback(callback);
     file = (data.file || file);  // the data's file name or the default name
     if (!file.match(/\.js$/)) {file += ".js"} // add .js if needed
     //
@@ -1431,7 +1436,7 @@ MathJax.Localization = {
         if (load) {
           return MathJax.Callback.Queue(
             load,["loadDomain",this,domain] // call again to load domain
-          ).Push(callback);
+          ).Push(callback||{});
         }
       }
       if (localeData.domains && domain in localeData.domains) {
@@ -1847,7 +1852,8 @@ MathJax.Hub = {
       locale: "en",        //  the language to use for messages
       mpContext: false,    //  true means pass menu events to MathPlayer in IE
       mpMouse: false,      //  true means pass mouse events to MathPlayer in IE
-      texHints: true       //  include class names for TeXAtom elements
+      texHints: true,      //  include class names for TeXAtom elements
+      semantics: false     //  add semantics tag with original form in MathML output
     },
     
     errorSettings: {
@@ -2735,7 +2741,7 @@ MathJax.Hub.Startup = {
     }
   },{
     id: "Jax",
-    version: "2.3",
+    version: "2.4.0",
     directory: ROOT+"/jax",
     extensionDir: ROOT+"/extensions"
   });
@@ -2781,7 +2787,7 @@ MathJax.Hub.Startup = {
     }
   },{
     id: "InputJax",
-    version: "2.3",
+    version: "2.4.0",
     directory: JAX.directory+"/input",
     extensionDir: JAX.extensionDir
   });
@@ -2814,7 +2820,7 @@ MathJax.Hub.Startup = {
     Remove: function (jax) {}
   },{
     id: "OutputJax",
-    version: "2.3",
+    version: "2.4.0",
     directory: JAX.directory+"/output",
     extensionDir: JAX.extensionDir,
     fontDir: ROOT+(BASE.isPacked?"":"/..")+"/fonts",
@@ -2898,7 +2904,7 @@ MathJax.Hub.Startup = {
     }
   },{
     id: "ElementJax",
-    version: "2.3",
+    version: "2.4.0",
     directory: JAX.directory+"/element",
     extensionDir: JAX.extensionDir,
     ID: 0,  // jax counter (for IDs)
@@ -2922,7 +2928,7 @@ MathJax.Hub.Startup = {
   //  Some "Fake" jax used to allow menu access for "Math Processing Error" messages
   //
   BASE.OutputJax.Error = {
-    id: "Error", version: "2.3", config: {},
+    id: "Error", version: "2.4.0", config: {},
     ContextMenu: function () {return BASE.Extension.MathEvents.Event.ContextMenu.apply(BASE.Extension.MathEvents.Event,arguments)},
     Mousedown:   function () {return BASE.Extension.MathEvents.Event.AltContextMenu.apply(BASE.Extension.MathEvents.Event,arguments)},
     getJaxFromMath: function (math) {return (math.nextSibling.MathJax||{}).error},
@@ -2939,7 +2945,7 @@ MathJax.Hub.Startup = {
     }
   };
   BASE.InputJax.Error = {
-    id: "Error", version: "2.3", config: {},
+    id: "Error", version: "2.4.0", config: {},
     sourceMenuTitle: /*_(MathMenu)*/ ["Original","Original Form"]
   };
   
@@ -2967,8 +2973,8 @@ MathJax.Hub.Startup = {
         }
       }
       CONFIG.root = scripts[i].src.replace(/(^|\/)[^\/]*(\?.*)?$/,'')
-        .replace(/^(https?:\/\/(cdn.mathjax.org|[0-9a-f]+(-[0-9a-f]+)?.ssl.cf1.rackcdn.com)\/mathjax\/)(latest)/,
-                 "$1"+BASE.version+"-$4");
+        // convert rackspace to cdn.mathjax.org now that it supports https protocol
+        .replace(/^(https?:)\/\/[0-9a-f]+(-[0-9a-f]+)?.ssl.cf1.rackcdn.com\//,"$1//cdn.mathjax.org/");
       BASE.Ajax.config.root = CONFIG.root;
       break;
     }

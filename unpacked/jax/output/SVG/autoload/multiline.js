@@ -9,7 +9,7 @@
  *
  *  ---------------------------------------------------------------------
  *  
- *  Copyright (c) 2011-2013 The MathJax Consortium
+ *  Copyright (c) 2011-2014 The MathJax Consortium
  * 
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@
  */
 
 MathJax.Hub.Register.StartupHook("SVG Jax Ready",function () {
-  var VERSION = "2.3";
+  var VERSION = "2.4.0";
   var MML = MathJax.ElementJax.mml,
       SVG = MathJax.OutputJax.SVG,
       BBOX = SVG.BBOX;
@@ -96,7 +96,7 @@ MathJax.Hub.Register.StartupHook("SVG Jax Ready",function () {
 
       var state = {
             n: 0, Y: 0,
-            scale: this.SVGgetScale(),
+            scale: this.scale || 1,
             isTop: isTop,
             values: {},
             VALUES: VALUES
@@ -115,7 +115,7 @@ MathJax.Hub.Register.StartupHook("SVG Jax Ready",function () {
       //  Break the expression at its best line breaks
       //
       while (this.SVGbetterBreak(end,state) && 
-             (end.scanW >= SVG.linebreakWidth || end.penalty == PENALTY.newline)) {
+             (end.scanW >= SVG.linebreakWidth || end.penalty === PENALTY.newline)) {
         this.SVGaddLine(svg,start,end.index,state,end.values,broken);
         start = end.index.slice(0); broken = true;
         align = this.SVGgetAlign(state,end.values);
@@ -222,7 +222,7 @@ MathJax.Hub.Register.StartupHook("SVG Jax Ready",function () {
       //
       if (state.n > 0) {
         var LHD = SVG.FONTDATA.baselineskip * state.scale;
-        var leading = (state.values.lineleading == null ? state.VALUES : state.values).lineleading;
+        var leading = (state.values.lineleading == null ? state.VALUES : state.values).lineleading * state.scale;
         state.Y -= Math.max(LHD,state.d + line.h + leading);
       }
       //
@@ -336,7 +336,7 @@ MathJax.Hub.Register.StartupHook("SVG Jax Ready",function () {
         if (state.last && svg.X) {svg.X = 0}
         line.Add(svg,line.w,0,true);
       }
-      if (state.first && svg.w === 0) {state.nextIsFirst = true}
+      if (state.first && svg && svg.w === 0) {state.nextIsFirst = true}
         else {delete state.nextIsFirst}
     }
   });
@@ -584,7 +584,8 @@ MathJax.Hub.Register.StartupHook("SVG Jax Ready",function () {
       if (!mo || !mo.SVGdata) {mo = this}
       var svg = mo.SVGdata, w = svg.w + svg.x;
       if (values.linebreakstyle === MML.LINEBREAKSTYLE.AFTER) {W += w; w = 0}
-      if (W - info.shift === 0) {return false} // don't break at zero width (FIXME?)
+      if (W - info.shift === 0 && values.linebreak !== MML.LINEBREAK.NEWLINE)
+        {return false} // don't break at zero width (FIXME?)
       var offset = SVG.linebreakWidth - W;
       // adjust offest for explicit first-line indent and align
       if (state.n === 0 && (values.indentshiftfirst !== state.VALUES.indentshiftfirst ||

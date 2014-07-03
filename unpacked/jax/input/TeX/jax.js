@@ -11,7 +11,7 @@
  *
  *  ---------------------------------------------------------------------
  *  
- *  Copyright (c) 2009-2013 The MathJax Consortium
+ *  Copyright (c) 2009-2014 The MathJax Consortium
  * 
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@
     Push: function () {
       var i, m, item, top;
       for (i = 0, m = arguments.length; i < m; i++) {
-        item = arguments[i];
+        item = arguments[i]; if (!item) continue;
         if (item instanceof MML.mbase) {item = STACKITEM.mml(item)}
         item.global = this.global;
         top = (this.data.length ? this.Top().checkItem(item) : true);
@@ -918,7 +918,7 @@
         leqalignno:        ['Matrix',null,null,"right left right",MML.LENGTH.THICKMATHSPACE+" 3em",".5em",'D'],
 
         //  TeX substitution macros
-        bmod:              ['Macro','\\mathbin{\\mmlToken{mo}{mod}}'],
+        bmod:              ['Macro','\\mmlToken{mo}[lspace="thickmathspace" rspace="thickmathspace"]{mod}'],
         pmod:              ['Macro','\\pod{\\mmlToken{mi}{mod}\\kern 6mu #1}',1],
         mod:               ['Macro','\\mathchoice{\\kern18mu}{\\kern12mu}{\\kern12mu}{\\kern12mu}\\mmlToken{mi}{mod}\\,\\,#1',1],
         pod:               ['Macro','\\mathchoice{\\kern18mu}{\\kern8mu}{\\kern8mu}{\\kern8mu}(#1)',1],
@@ -935,10 +935,10 @@
         mathsf:            ['Macro','{\\sf #1}',1],
         mathtt:            ['Macro','{\\tt #1}',1],
         textrm:            ['Macro','\\mathord{\\rm\\text{#1}}',1],
-        textit:            ['Macro','\\mathord{\\it{\\text{#1}}}',1],
-        textbf:            ['Macro','\\mathord{\\bf{\\text{#1}}}',1],
-        textsf:            ['Macro','\\mathord{\\sf{\\text{#1}}}',1],
-        texttt:            ['Macro','\\mathord{\\tt{\\text{#1}}}',1],
+        textit:            ['Macro','\\mathord{\\it\\text{#1}}',1],
+        textbf:            ['Macro','\\mathord{\\bf\\text{#1}}',1],
+        textsf:            ['Macro','\\mathord{\\sf\\text{#1}}',1],
+        texttt:            ['Macro','\\mathord{\\tt\\text{#1}}',1],
         pmb:               ['Macro','\\rlap{#1}\\kern1px{#1}',1],
         TeX:               ['Macro','T\\kern-.14em\\lower.5ex{E}\\kern-.115em X'],
         LaTeX:             ['Macro','L\\kern-.325em\\raise.21em{\\scriptstyle{A}}\\kern-.17em\\TeX'],
@@ -952,8 +952,8 @@
         
 
         //  LaTeX
-        begin:              'Begin',
-        end:                'End',
+        begin:              'BeginEnd',
+        end:                'BeginEnd',
 
         newcommand:        ['Extension','newcommand'],
         renewcommand:      ['Extension','newcommand'],
@@ -1254,8 +1254,8 @@
      *  Handle other characters (as <mo> elements)
      */
     Other: function (c) {
-      var def = {stretchy: false}, mo;
-      if (this.stack.env.font) {def.mathvariant = this.stack.env.font}
+      var def, mo;
+      if (this.stack.env.font) {def = {mathvariant: this.stack.env.font}}
       if (TEXDEF.remap[c]) {
         c = TEXDEF.remap[c];
         if (c instanceof Array) {def = c[1]; c = c[0]}
@@ -1263,6 +1263,7 @@
       } else {
         mo = MML.mo(c).With(def);
       }
+      if (mo.autoDefault("stretchy",true)) {mo.stretchy = false}
       if (mo.autoDefault("texClass",true) == "") {mo = MML.TeXAtom(mo)}
       this.Push(this.mmlToken(mo));
     },
@@ -1491,7 +1492,7 @@
     
     Lap: function (name) {
       var mml = MML.mpadded(this.ParseArg(name)).With({width: 0});
-      if (name === "\\llap") {mml.lspace = "-1 width"}
+      if (name === "\\llap") {mml.lspace = "-1width"}
       this.Push(MML.TeXAtom(mml));
     },
     
@@ -1714,25 +1715,30 @@
     *   LaTeX environments
     */
 
-    Begin: function (name) {
-      var env = this.GetArgument(name);
-      if (env.match(/[^a-z*]/i))
-        {TEX.Error(["InvalidEnv","Invalid environment name '%1'",env])}
+    BeginEnd: function (name) {
+      var env = this.GetArgument(name), isEnd = false;
+      if (env.match(/^\\end\\/)) {isEnd = true; env = env.substr(5)} // special \end{} for \newenvironment environments
+      if (env.match(/\\/i)) {TEX.Error(["InvalidEnv","Invalid environment name '%1'",env])}
       var cmd = this.envFindName(env);
-      if (!cmd)
-        {TEX.Error(["UnknownEnv","Unknown environment '%1'",env])}
-      if (++this.macroCount > TEX.config.MAXMACROS) {
-        TEX.Error(["MaxMacroSub2",
-                   "MathJax maximum substitution count exceeded; " +
-                   "is there a recursive latex environment?"]);
-      }
+      if (!cmd) {TEX.Error(["UnknownEnv","Unknown environment '%1'",env])}
       if (!(cmd instanceof Array)) {cmd = [cmd]}
-      var mml = STACKITEM.begin().With({name: env, end: cmd[1], parse:this});
-      if (cmd[0] && this[cmd[0]]) {mml = this[cmd[0]].apply(this,[mml].concat(cmd.slice(2)))}
+      var end = (cmd[1] instanceof Array ? cmd[1][0] : cmd[1]);
+      var mml = STACKITEM.begin().With({name: env, end: end, parse:this});
+      if (name === "\\end") {
+        if (!isEnd && cmd[1] instanceof Array && this[cmd[1][1]]) {
+          mml = this[cmd[1][1]].apply(this,[mml].concat(cmd.slice(2)));
+        } else {
+          mml = STACKITEM.end().With({name: env});
+        }
+      } else {
+        if (++this.macroCount > TEX.config.MAXMACROS) {
+          TEX.Error(["MaxMacroSub2",
+                     "MathJax maximum substitution count exceeded; " +
+                     "is there a recursive latex environment?"]);
+        }
+        if (cmd[0] && this[cmd[0]]) {mml = this[cmd[0]].apply(this,[mml].concat(cmd.slice(2)))}
+      }
       this.Push(mml);
-    },
-    End: function (name) {
-      this.Push(STACKITEM.end().With({name: this.GetArgument(name)}));
     },
     envFindName: function (name) {return TEXDEF.environment[name]},
     
@@ -2057,6 +2063,7 @@
     },
     
     sourceMenuTitle: /*_(MathMenu)*/ ["TeXCommands","TeX Commands"],
+    annotationEncoding: "application/x-tex",
 
     prefilterHooks: MathJax.Callback.Hooks(true),    // hooks to run before processing TeX
     postfilterHooks: MathJax.Callback.Hooks(true),   // hooks to run after processing TeX
@@ -2083,7 +2090,6 @@
       this.prefilterHooks.Execute(data); math = data.math;
       try {
         mml = TEX.Parse(math).mml();
-//        mml = MML.semantics(mml,MML.annotation(math).With({encoding:"application/x-tex"}));
       } catch(err) {
         if (!err.texError) {throw err}
         mml = this.formatError(err,math,display,script);

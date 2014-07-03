@@ -11,7 +11,7 @@
  *  
  *  ---------------------------------------------------------------------
  *  
- *  Copyright (c) 2011-2013 The MathJax Consortium
+ *  Copyright (c) 2011-2014 The MathJax Consortium
  * 
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -417,12 +417,20 @@
       emex.parentNode.removeChild(emex);
 
       span.appendChild(this.textSVG);
-      this.mathDIV = span;
+      this.mathDIV = span; this.zoomScale = parseInt(HUB.config.menuSettings.zscale) / 100;
       this.idPostfix = "-zoom"; jax.root.toSVG(span,span); this.idPostfix = "";
+      this.zoomScale = 1;
       span.removeChild(this.textSVG);
       
       if (this.operaZoomRefresh)
         {setTimeout(function () {span.firstChild.style.border="1px solid transparent"},1)}
+      //
+      // WebKit bug (issue #749)
+      //  
+      if (span.offsetWidth < span.firstChild.offsetWidth) {
+        span.style.minWidth = span.firstChild.offsetWidth + "px";
+        math.style.minWidth = math.firstChild.offsetWidth + "px";
+      }
       //
       //  Get height and width of zoomed math and original math
       //
@@ -465,18 +473,19 @@
       if (length === MML.SIZE.SMALL)  {return  710}
       if (length === "infinity")      {return SVG.BIGDIMEN}
       if (length.match(/mathspace$/)) {return 1000*SVG.MATHSPACE[length]}
+      var emFactor = (this.zoomScale || 1) / SVG.em;
       var match = length.match(/^\s*([-+]?(?:\.\d+|\d+(?:\.\d*)?))?(pt|em|ex|mu|px|pc|in|mm|cm|%)?/);
       var m = parseFloat(match[1]||"1") * 1000, unit = match[2];
       if (size == null) {size = 1000};  if (mu == null) {mu = 1}
       if (unit === "em") {return m}
       if (unit === "ex") {return m * SVG.TeX.x_height/1000}
       if (unit === "%")  {return m / 100 * size / 1000}
-      if (unit === "px") {return m / SVG.em}
-      if (unit === "pt") {return m / 10}                             // 10 pt to an em
-      if (unit === "pc") {return m * 1.2}                            // 12 pt to a pc
-      if (unit === "in") {return m * this.pxPerInch / SVG.em}
-      if (unit === "cm") {return m * this.pxPerInch / SVG.em / 2.54} // 2.54 cm to an inch
-      if (unit === "mm") {return m * this.pxPerInch / SVG.em / 25.4} // 10 mm to a cm
+      if (unit === "px") {return m * emFactor}
+      if (unit === "pt") {return m / 10}                               // 10 pt to an em
+      if (unit === "pc") {return m * 1.2}                              // 12 pt to a pc
+      if (unit === "in") {return m * this.pxPerInch * emFactor}
+      if (unit === "cm") {return m * this.pxPerInch * emFactor / 2.54} // 2.54 cm to an inch
+      if (unit === "mm") {return m * this.pxPerInch * emFactor / 25.4} // 10 mm to a cm
       if (unit === "mu") {return m / 18 * mu}
       return m*size / 1000;  // relative to given size (or 1em as default)
     },
@@ -895,7 +904,7 @@
       {
         var svg = this.svg[i], mml = svg.mml;
         if (mml) {
-          if (mml.SVGdata.h !== this.sh || mml.SVGdata.d !== this.sd) {
+          if (mml.forceStretch || mml.SVGdata.h !== this.sh || mml.SVGdata.d !== this.sd) {
             svg = mml.SVGstretchV(this.sh,this.sd);
           }
           mml.SVGdata.HW = this.sh; mml.SVGdata.D = this.sd;
@@ -1029,8 +1038,8 @@
       toSVG: function () {
         this.SVGgetStyles();
 	var variant = this.SVGgetVariant();
-        var svg = this.SVG();
-        svg.scale = this.SVGgetScale(); this.SVGhandleSpace(svg);
+        var svg = this.SVG(); this.SVGgetScale(svg);
+        this.SVGhandleSpace(svg);
 	for (var i = 0, m = this.data.length; i < m; i++) {
           if (this.data[i]) {
             var child = svg.Add(this.data[i].toSVG(variant,svg.scale),svg.w,0,true);
@@ -1152,7 +1161,8 @@
 	  }
 	} else {
 	  var space = this.texSpacing();
-	  if (space !== "") {svg.x += SVG.length2em(space,this.SVGgetScale())/svg.scale}
+          this.SVGgetScale();
+	  if (space !== "") {svg.x += SVG.length2em(space,this.scale)*this.mscale}
         }
       },
 
@@ -1275,19 +1285,25 @@
 	return SVG.FONTDATA.VARIANT[variant];
       },
       
-      SVGgetScale: function () {
-	var scale = 1,
-            values = this.getValues("mathsize","scriptlevel","fontsize");
-        if ((this.styles||{}).fontSize && !values.fontsize) {values.fontsize = this.styles.fontSize}
-	if (values.fontsize && !this.mathsize) {values.mathsize = values.fontsize}
-	if (values.scriptlevel !== 0) {
-	  if (values.scriptlevel > 2) {values.scriptlevel = 2}
-	  scale = Math.pow(this.Get("scriptsizemultiplier"),values.scriptlevel);
-	  values.scriptminsize = SVG.length2em(this.Get("scriptminsize"))/1000;
-	  if (scale < values.scriptminsize) {scale = values.scriptminsize}
-	}
-	if (this.isToken) {scale *= SVG.length2em(values.mathsize)/1000}
-	return scale;
+      SVGgetScale: function (svg) {
+        var scale = 1;
+        if (this.mscale) {
+          scale = this.scale;
+        } else {
+          var values = this.getValues("scriptlevel","fontsize");
+          values.mathsize = (this.isToken ? this : this.Parent()).Get("mathsize");
+          if ((this.styles||{}).fontSize && !values.fontsize) {values.fontsize = this.styles.fontSize}
+          if (values.fontsize && !this.mathsize) {values.mathsize = values.fontsize}
+          if (values.scriptlevel !== 0) {
+            if (values.scriptlevel > 2) {values.scriptlevel = 2}
+            scale = Math.pow(this.Get("scriptsizemultiplier"),values.scriptlevel);
+            values.scriptminsize = SVG.length2em(this.Get("scriptminsize"))/1000;
+            if (scale < values.scriptminsize) {scale = values.scriptminsize}
+          }
+          this.scale = scale; this.mscale = SVG.length2em(values.mathsize)/1000;
+        }
+        if (svg) {svg.scale = scale; if (this.isToken) {svg.scale *= this.mscale}}
+	return scale * this.mscale;
       },
       SVGgetMu: function (svg) {
 	var mu = 1, values = this.getValues("scriptlevel","scriptsizemultiplier");
@@ -1309,8 +1325,15 @@
       },
       
       SVGcanStretch: function (direction) {
-	if (this.isEmbellished()) {return this.Core().SVGcanStretch(direction)}
-	return false;
+        var can = false;
+	if (this.isEmbellished()) {
+          var core = this.Core();
+          if (core && core !== this) {
+            can = core.SVGcanStretch(direction);
+            if (can && core.forceStretch) {this.forceStretch = true}
+          }
+        }
+        return can;
       },
       SVGstretchV: function (h,d) {return this.toSVG(h,d)},
       SVGstretchH: function (w) {return this.toSVG(w)},
@@ -1346,7 +1369,9 @@
     MML.mo.Augment({
       toSVG: function (HW,D) {
         this.SVGgetStyles();
-        var svg = this.svg = this.SVG(); this.SVGhandleSpace(svg);
+        var svg = this.svg = this.SVG();
+        var scale = this.SVGgetScale(svg);
+        this.SVGhandleSpace(svg);
         if (this.data.length == 0) {svg.Clean(); this.SVGsaveData(svg); return svg}
         //
         //  Stretch the operator, if that is requested
@@ -1356,7 +1381,7 @@
         //
         //  Get the variant, and check for operator size
         //
-        var scale = this.SVGgetScale(), variant = this.SVGgetVariant();
+        var variant = this.SVGgetVariant();
 	var values = this.getValues("largeop","displaystyle");
 	if (values.largeop)
 	  {variant = SVG.FONTDATA.VARIANT[values.displaystyle ? "-largeOp" : "-smallOp"]}
@@ -1407,7 +1432,7 @@
       CoreParent: function () {
         var parent = this;
         while (parent && parent.isEmbellished() &&
-               parent.CoreMO() === this && !parent.isa(MML.math))  {parent = parent.Parent()}
+               parent.CoreMO() === this && !parent.isa(MML.math)) {parent = parent.Parent()}
         return parent;
       },
       CoreText: function (parent) {
@@ -1449,12 +1474,13 @@
 	c = SVG.FONTDATA.DELIMITERS[c.charCodeAt(0)];
         var can = (c && c.dir == direction.substr(0,1));
         if (!can) {delete this.svg}
+        this.forceStretch = can && (this.Get("minsize",true) || this.Get("maxsize",true));
         return can;
       },
       SVGstretchV: function (h,d) {
         var svg = this.svg || this.toSVG();
 	var values = this.getValues("symmetric","maxsize","minsize");
-	var axis = SVG.TeX.axis_height, mu = this.SVGgetMu(svg), H;
+	var axis = SVG.TeX.axis_height*svg.scale, mu = this.SVGgetMu(svg), H;
 	if (values.symmetric) {H = 2*Math.max(h-axis,d+axis)} else {H = h + d}
 	values.maxsize = SVG.length2em(values.maxsize,mu,svg.h+svg.d);
 	values.minsize = SVG.length2em(values.minsize,mu,svg.h+svg.d);
@@ -1467,6 +1493,7 @@
 	this.SVGhandleColor(svg);
         delete this.svg.element;
         this.SVGsaveData(svg);
+        svg.stretched = true;
 	return svg;
       },
       SVGstretchH: function (w) {
@@ -1483,6 +1510,7 @@
 	this.SVGhandleColor(svg);
         delete this.svg.element;
         this.SVGsaveData(svg);
+        svg.stretched = true;
 	return svg;
       }
     });
@@ -1491,7 +1519,7 @@
       toSVG: function () {
         if (SVG.config.mtextFontInherit || this.Parent().type === "merror") {
           this.SVGgetStyles();
-          var svg = this.SVG(), scale = this.SVGgetScale();
+          var svg = this.SVG(), scale = this.SVGgetScale(svg);
           this.SVGhandleSpace(svg);
           var variant = this.SVGgetVariant(), def = {direction:this.Get("dir")};
           if (variant.bold)   {def["font-weight"] = "bold"}
@@ -1547,10 +1575,11 @@
 	var values = this.getValues("height","depth","width");
 	values.mathbackground = this.mathbackground;
 	if (this.background && !this.mathbackground) {values.mathbackground = this.background}
-        var svg = this.SVG(), mu = this.SVGgetMu(svg);
-	svg.h = SVG.length2em(values.height,mu) / svg.scale;
-        svg.d = SVG.length2em(values.depth,mu)  / svg.scale;
-	svg.w = svg.r = SVG.length2em(values.width,mu) / svg.scale;
+        var svg = this.SVG(); this.SVGgetScale(svg);
+        var scale = this.mscale, mu = this.SVGgetMu(svg); 
+	svg.h = SVG.length2em(values.height,mu) * scale;
+        svg.d = SVG.length2em(values.depth,mu)  * scale;
+	svg.w = svg.r = SVG.length2em(values.width,mu) * scale;
         if (svg.w < 0) {svg.x = svg.w; svg.w = svg.r = 0}
         if (svg.h < -svg.d) {svg.d = -svg.h}
         svg.l = 0; svg.Clean();
@@ -1563,7 +1592,7 @@
     MML.mphantom.Augment({
       toSVG: function (HW,D) {
         this.SVGgetStyles();
-        var svg = this.SVG();
+        var svg = this.SVG(); this.SVGgetScale(svg);
 	if (this.data[0] != null) {
           this.SVGhandleSpace(svg); svg.Add(this.SVGdataStretched(0,HW,D)); svg.Clean();
           while (svg.element.firstChild) {svg.element.removeChild(svg.element.firstChild)}
@@ -1580,7 +1609,7 @@
         this.SVGgetStyles();
         var svg = this.SVG();
 	if (this.data[0] != null) {
-          this.SVGhandleSpace(svg);
+          this.SVGgetScale(svg); this.SVGhandleSpace(svg);
           var pad = this.SVGdataStretched(0,HW,D), mu = this.SVGgetMu(svg);
 	  var values = this.getValues("height","depth","width","lspace","voffset"), x = 0, y = 0;
 	  if (values.lspace)  {x = this.SVGlength2em(pad,values.lspace,mu)}
@@ -1601,7 +1630,7 @@
 	if (m == null) {m = -SVG.BIGDIMEN}
 	var match = String(length).match(/width|height|depth/);
 	var size = (match ? svg[match[0].charAt(0)] : (d ? svg[d] : 0));
-	var v = SVG.length2em(length,mu,size);
+	var v = SVG.length2em(length,mu,size/this.mscale)*this.mscale;
 	if (d && String(length).match(/^\s*[-+]/))
 	  {return Math.max(m,svg[d]+v)} else {return v}
       }
@@ -1665,12 +1694,11 @@
     MML.mfrac.Augment({
       toSVG: function () {
         this.SVGgetStyles();
-        var svg = this.SVG();
-        var frac = BBOX(); this.SVGhandleSpace(frac);
+        var svg = this.SVG(), scale = this.SVGgetScale(svg);
+        var frac = BBOX(); frac.scale = svg.scale; this.SVGhandleSpace(frac);
         var num = this.SVGchildSVG(0), den = this.SVGchildSVG(1);
 	var values = this.getValues("displaystyle","linethickness","numalign","denomalign","bevelled");
-	var scale = svg.scale = frac.scale = this.SVGgetScale(),
-            isDisplay = values.displaystyle;
+	var isDisplay = values.displaystyle;
 	var a = SVG.TeX.axis_height * scale;
 	if (values.bevelled) {
 	  var delta = (isDisplay ? 400 : 150);
@@ -1681,7 +1709,7 @@
 	  frac.Add(den,num.w+bevel.w-delta,(den.d-den.h)/2+a-delta);
 	} else {
 	  var W = Math.max(num.w,den.w);
-	  var t = SVG.thickness2em(values.linethickness,scale), p,q, u,v;
+	  var t = SVG.thickness2em(values.linethickness,this.scale)*this.mscale, p,q, u,v;
 	  var mt = SVG.TeX.min_rule_thickness/SVG.em * 1000;
 	  if (isDisplay) {u = SVG.TeX.num1; v = SVG.TeX.denom1}
 	    else {u = (t === 0 ? SVG.TeX.num3 : SVG.TeX.num2); v = SVG.TeX.denom2}
@@ -1712,17 +1740,17 @@
           //  Add nulldelimiterspace around the fraction
           //   (TeXBook pg 150 and Appendix G rule 15e)
           //
-          svg.x = svg.X = SVG.TeX.nulldelimiterspace;
+          svg.x = svg.X = SVG.TeX.nulldelimiterspace * this.mscale;
         }
+        this.SUPER(arguments).SVGhandleSpace.call(this,svg);
       }
     });
 
     MML.msqrt.Augment({
       toSVG: function () {
         this.SVGgetStyles();
-        var svg = this.SVG(); this.SVGhandleSpace(svg);
+        var svg = this.SVG(), scale = this.SVGgetScale(svg); this.SVGhandleSpace(svg);
 	var base = this.SVGchildSVG(0), rule, surd;
-	var scale = this.SVGgetScale();
 	var t = SVG.TeX.rule_thickness * scale, p,q, H, x = 0;
 	if (this.Get("displaystyle")) {p = SVG.TeX.x_height * scale} else {p = t}
 	q = Math.max(t + p/4,1000*SVG.TeX.min_root_space/SVG.em);
@@ -1813,9 +1841,7 @@
 	if (!values.displaystyle && this.data[this.base] != null &&
 	    this.data[this.base].CoreMO().Get("movablelimits"))
 	      {return MML.msubsup.prototype.toSVG.call(this)}
-        var svg = this.SVG();
-        this.SVGhandleSpace(svg);
-        var scale = svg.scale = this.SVGgetScale();
+        var svg = this.SVG(), scale = this.SVGgetScale(svg); this.SVGhandleSpace(svg);
 	var boxes = [], stretch = [], box, i, m, W = -SVG.BIGDIMEN, WW = W;
 	for (i = 0, m = this.data.length; i < m; i++) {
 	  if (this.data[i] != null) {
@@ -1823,7 +1849,7 @@
               boxes[i] = this.SVGdataStretched(i,HW,D);
 	      stretch[i] = (D != null || HW == null) && this.data[i].SVGcanStretch("Horizontal");
 	    } else {
-              boxes[i] = this.data[i].toSVG();
+              boxes[i] = this.data[i].toSVG(); boxes[i].x = 0; delete boxes[i].X;
 	      stretch[i] = this.data[i].SVGcanStretch("Horizontal");
 	    }
 	    if (boxes[i].w > WW) {WW = boxes[i].w}
@@ -1832,10 +1858,13 @@
 	}
 	if (D == null && HW != null) {W = HW} else if (W == -SVG.BIGDIMEN) {W = WW}
         for (i = WW = 0, m = this.data.length; i < m; i++) {if (this.data[i]) {
-          if (stretch[i]) {boxes[i] = this.data[i].SVGstretchH(W)}
+          if (stretch[i]) {
+            boxes[i] = this.data[i].SVGstretchH(W);
+            if (i !== this.base) {boxes[i].x = 0; delete boxes[i].X}
+          }
           if (boxes[i].w > WW) {WW = boxes[i].w}
         }}
-        var t = SVG.TeX.rule_thickness;
+        var t = SVG.TeX.rule_thickness * this.mscale;
 	var base = boxes[this.base] || {w:0, h:0, d:0, H:0, D:0, l:0, r:0, y:0, scale:scale};
 	var x, y, z1, z2, z3, dw, k, delta = 0;
         if (base.ic) {delta = 1.3*base.ic + .05} // adjust faked IC to be more in line with expeted results
@@ -1889,9 +1918,8 @@
     MML.msubsup.Augment({
       toSVG: function (HW,D) {
         this.SVGgetStyles();
-        var svg = this.SVG();
-        this.SVGhandleSpace(svg);
-	var scale = svg.scale = this.SVGgetScale(), mu = this.SVGgetMu(svg);
+        var svg = this.SVG(), scale = this.SVGgetScale(svg); this.SVGhandleSpace(svg);
+	var mu = this.SVGgetMu(svg);
         var base = svg.Add(this.SVGdataStretched(this.base,HW,D));
 	var sscale = (this.data[this.sup] || this.data[this.sub] || this).SVGgetScale();
 	var x_height = SVG.TeX.x_height * scale, s = SVG.TeX.scriptspace * scale;
@@ -2042,11 +2070,9 @@
         var svg = this.SVG();
         this.SVGhandleSpace(svg);
 	if (this.data[0] != null) {
-          var box = this.data[0].SVGdataStretched(0,HW,D), y = 0;
-          if (this.texClass === MML.TEXCLASS.VCENTER) {
-	    // FIXME: should the axis height be scaled?
-	    y = SVG.TeX.axis_height - (box.h+box.d)/2 + box.d;
-	  }
+          var box = this.SVGdataStretched(0,HW,D), y = 0;
+          if (this.texClass === MML.TEXCLASS.VCENTER)
+            {y = SVG.TeX.axis_height - (box.h+box.d)/2 + box.d}
           svg.Add(box,0,y);
           svg.ic = box.ic;
 	}

@@ -11,7 +11,7 @@
  *
  *  ---------------------------------------------------------------------
  *  
- *  Copyright (c) 2009-2013 The MathJax Consortium
+ *  Copyright (c) 2009-2014 The MathJax Consortium
  * 
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ MathJax.ElementJax.mml = MathJax.ElementJax({
   mimeType: "jax/mml"
 },{
   id: "mml",
-  version: "2.3",
+  version: "2.4.0",
   directory: MathJax.ElementJax.directory + "/mml",
   extensionDir: MathJax.ElementJax.extensionDir + "/mml",
   optableDir: MathJax.ElementJax.directory + "/mml/optable"
@@ -610,7 +610,7 @@ MathJax.ElementJax.mml.Augment({
       this.texClass = this.Get("texClass");
       if (this.data.join("") === "\u2061") {
         // force previous node to be texClass OP, and skip this node
-        if (prev) prev.texClass = MML.TEXCLASS.OP;
+        if (prev) {prev.texClass = MML.TEXCLASS.OP; prev.fnOP = true}
         this.texClass = this.prevClass = MML.TEXCLASS.NONE;
         return prev;
       }
@@ -752,7 +752,7 @@ MathJax.ElementJax.mml.Augment({
     },
     setTeXclass: function (prev) {
       var i, m = this.data.length;
-      if (this.open || this.close) {
+      if ((this.open || this.close) && (!prev || !prev.fnOP)) {
         //
         // <mrow> came from \left...\right
         // so treat as subexpression (tex class INNER)
