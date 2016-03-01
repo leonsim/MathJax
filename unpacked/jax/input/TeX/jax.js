@@ -584,7 +584,6 @@
         sqsubseteq:   '2291',
         sqsupseteq:   '2292',
         parallel:     '2225',
-        //parallel:     '2AFD',
         mid:          '2223',
         dashv:        '22A3',
         vdash:        '22A2',
