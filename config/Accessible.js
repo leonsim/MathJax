@@ -1,7 +1,7 @@
 /*
  *  /MathJax/config/Accessible.js
  *
- *  Copyright (c) 2009-2014 The MathJax Consortium
+ *  Copyright (c) 2009-2015 The MathJax Consortium
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,4 +16,4 @@
  *  limitations under the License.
  */
 
-MathJax.Hub.Config({config:["MMLorHTML.js"],extensions:["tex2jax.js","mml2jax.js","MathEvents.js","MathZoom.js","MathMenu.js","toMathML.js","TeX/noErrors.js","TeX/noUndefined.js","TeX/AMSmath.js","TeX/AMSsymbols.js"],jax:["input/TeX","input/MathML","output/HTML-CSS","output/NativeMML"],menuSettings:{zoom:"Double-Click",mpContext:true,mpMouse:true},errorSettings:{message:["[",["MathError","Math Error"],"]"]}});MathJax.Ajax.loadComplete("[MathJax]/config/Accessible.js");
+MathJax.Hub.Config({config:["MMLorHTML.js"],extensions:["tex2jax.js","mml2jax.js","MathEvents.js","MathZoom.js","MathMenu.js","toMathML.js","TeX/noErrors.js","TeX/noUndefined.js","TeX/AMSmath.js","TeX/AMSsymbols.js","fast-preview.js","AssistiveMML.js"],jax:["input/TeX","input/MathML","output/HTML-CSS","output/NativeMML","output/PreviewHTML"],menuSettings:{zoom:"Double-Click",mpContext:true,mpMouse:true},errorSettings:{message:["[",["MathError","Math Error"],"]"]}});MathJax.Ajax.loadComplete("[MathJax]/config/Accessible.js");

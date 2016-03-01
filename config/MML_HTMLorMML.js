@@ -1,7 +1,7 @@
 /*
  *  /MathJax/config/MML_HTMLorMML.js
  *
- *  Copyright (c) 2009-2014 The MathJax Consortium
+ *  Copyright (c) 2009-2015 The MathJax Consortium
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,4 +16,4 @@
  *  limitations under the License.
  */
 
-MathJax.Hub.Config({config:["MMLorHTML.js"],extensions:["mml2jax.js","MathEvents.js","MathZoom.js","MathMenu.js","toMathML.js"],jax:["input/MathML","output/HTML-CSS","output/NativeMML"]});MathJax.Ajax.loadComplete("[MathJax]/config/MML_HTMLorMML.js");
+MathJax.Hub.Config({config:["MMLorHTML.js"],extensions:["mml2jax.js","MathEvents.js","MathZoom.js","MathMenu.js","toMathML.js","fast-preview.js","AssistiveMML.js"],jax:["input/MathML","output/HTML-CSS","output/NativeMML","output/PreviewHTML"]});MathJax.Ajax.loadComplete("[MathJax]/config/MML_HTMLorMML.js");
